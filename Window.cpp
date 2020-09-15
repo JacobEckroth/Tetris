@@ -21,6 +21,12 @@ void Window::update() {
 void Window::handleEvents() {
 	SDL_Event event;
 	SDL_PollEvent(&event);
+	if (board->justReset()) {	//gets rid of leftover events when the board resets.
+		while (SDL_PollEvent(&event)) {
+
+		}
+	}
+
 	switch (event.type) {
 	case SDL_QUIT:
 		isRunning = false;
@@ -41,7 +47,11 @@ void Window::handleEvents() {
 }
 
 void Window::handleKeyDown(SDL_KeyboardEvent& key) {
+	if (board->justReset()) {
+		return;
+	}
 	switch (key.keysym.scancode) {
+		
 	case 80:
 		
 		board->attemptLeftMove();
@@ -66,6 +76,15 @@ void Window::handleKeyDown(SDL_KeyboardEvent& key) {
 		break;
 	case 82:
 		board->attemptRotateClockwise();
+		break;
+	case 26:
+		board->attemptRotateClockwise();
+		break;
+	case 6:
+		board->swapHeld();
+		break;
+	case 42:
+		board->resetBoard();
 		break;
 	default:
 		std::cout << "Scancode is:" << key.keysym.scancode << std::endl;

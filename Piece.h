@@ -11,15 +11,24 @@ struct boxLocation {
 class Piece
 {
 public:
+	int getWidth() {
+		return width;
+	}
+	int getHeight() {
+		return height;
+	}
+
+
 	void render();
 	void update();
-	void reset();
+	void reset(char);
 	void setColor(SDL_Color,char);
 	Piece();
 	~Piece();
 	boxLocation*& getBoxes() {
 		return boxes;
 	}
+	
 	
 
 	void setBoxes(boxLocation*);
@@ -33,8 +42,11 @@ public:
 		return pieceColor;
 	}
 
-	boxLocation*& getCenter() {
-		return centerOfPiece;
+	boxLocation*& getTopLeft() {
+		return topLeftCorner;
+	}
+	void setHeld(bool newOption) {
+		isHeld = newOption;
 	}
 	void moveRight();
 	void moveLeft();
@@ -42,6 +54,11 @@ public:
 	int getRotation() {
 		return rotationLevel;
 	}
+	void updateHeld(int newX, int newY) {
+		heldX = newX;
+		heldY = newY;
+	}
+	void setColsToZero();
 
 	
 	
@@ -52,8 +69,12 @@ private:
 	char colorType;
 	char pieceType;
 	int middleCol;
-
-	boxLocation* centerOfPiece;
+	bool isHeld;
+	boxLocation* topLeftCorner;
+	int width;
+	int height;
+	int heldX;
+	int heldY;
 	
 
 };

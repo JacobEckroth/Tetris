@@ -9,11 +9,14 @@ int Board::xPos = 0;
 int Board::yPos = 0;
 int Board::rows = 0;
 int Board::cols = 0;
+SDL_Color Board::gridColor;
 
 void Board::render() {
 	renderBoard();
 	highlightPiece->render();
 	movePiece->render();
+	holder.render();
+	nextHolder.render();
 	renderGrid();
 }
 
@@ -40,10 +43,21 @@ void Board::attemptDownMove() {
 		movePiece->moveDown();
 	}
 }
+void Board::swapHeld() {
+	char newPiece = holder.swapHeldPiece(movePiece->getType());
+	if (newPiece != ' ') {
+		movePiece->reset(newPiece);
+	}
+	else {
+		movePiece->reset(nextHolder.getNextPiece());
+	}
+	updateHiglightPiece();
+	updateHighlightLocation();
+}
 
 void Board::renderGrid() {
 	SDL_Rect gridRect;
-	SDL_SetRenderDrawColor(Window::renderer, 29, 29, 29, 255);
+	SDL_SetRenderDrawColor(Window::renderer, gridColor.r, gridColor.g, gridColor.b, 255);
 	gridRect.w = Box::boxWidth;
 	
 	gridRect.h = Box::boxHeight;
@@ -91,12 +105,21 @@ void Board::init(int windowHeight, int windowWidth, int rows, int cols) {
 
 		}
 	}
+	nextHolder.init(xPos + boardWidth + Box::boxWidth, yPos);
+
+
+	holder.setY(yPos);
+	holder.init();
 	movePiece = new Piece();
 	highlightPiece = new Piece();
-	movePiece->reset();
+	movePiece->reset(nextHolder.getNextPiece());
 	updateHiglightPiece();
 	updateHighlightLocation();
 	lastUpdated = SDL_GetTicks();
+
+
+
+	
 	
 	
 }
@@ -165,7 +188,7 @@ void Board::spawnNewPiece() {
 		board[boxes[i].row][boxes[i].col].updateColor(movePiece->getColor());
 		board[boxes[i].row][boxes[i].col].updateType('f');
 	}
-	movePiece->reset();
+	movePiece->reset(nextHolder.getNextPiece());
 	
 	while (true) {
 		int row = checkForRows();
@@ -178,29 +201,79 @@ void Board::spawnNewPiece() {
 	}
 	updateHiglightPiece();		//updates the color of the highlight piece, as well as initial position.
 	updateHighlightLocation();
+	checkLevel();
 }
 
 
 
 Board::Board() {
 	timeToMove = 1000;	//one second in between updates;
+	score = 0;
+	level = 0;
+	rowsRemoved = 0;
+	boardReset = false;
+}
+
+
+void Board::checkLevel() {
+	level = totalRowsCleared % 10;
+	timeToMove = 1000 - (50 * level);
+	if (timeToMove <= 0) {
+		timeToMove = 100;
+	}
+
+
 }
 void Board::update() {
+	if (boardReset) {
+		boardReset = false;
+	}
 	if (SDL_GetTicks() - lastUpdated >= timeToMove) {
 		if (canMoveDown()) {
 			movePiece->update();
 			canRotateClockwise();
 		}
 		else {
+			if (checkIfGameOver()) {
+				SDL_Delay(2000);
+				resetBoard();
+				return;
+			}
 			spawnNewPiece();
 		}
 			lastUpdated = SDL_GetTicks();
 	}
-	if (!(canMoveDown() || canMoveLeft() || canMoveRight())) {
+	if (!(canMoveDown() || canMoveLeft() || canMoveRight() || canRotateClockwise())) {
+		if (checkIfGameOver()) {
+			SDL_Delay(2000);
+			resetBoard();
+			return;
+		}
 		spawnNewPiece();
 		lastUpdated = SDL_GetTicks();
 	}
 }
+
+bool Board::checkIfGameOver() {
+	for (int i = 0; i < 4; i++) {
+		if (!(board[movePiece->getBoxes()[i].row][movePiece->getBoxes()[i].col].isEmpty())) {
+			
+			SDL_SetRenderDrawColor(Window::renderer, 0, 0, 0, 255);
+			SDL_RenderClear(Window::renderer);
+			holder.render();
+			nextHolder.render();
+			renderBoard();
+			renderGrid();
+			SDL_RenderPresent(Window::renderer);
+			
+			
+			
+			return true;
+		}
+	}
+	return false;
+}
+
 
 Board::~Board() {
 	for (int i = 0; i < rows; i++) {
@@ -311,6 +384,8 @@ void Board::initializeColors() {
 	Box::orange.b = 0;
 	Box::orange.a = 255;
 
+	gridColor.r = gridColor.b = gridColor.g = 29;
+	gridColor.a = 255;
 }
 
 
@@ -324,29 +399,92 @@ int Board::checkForRows() {
 			}
 		}
 		if (rowFull == true) {
+			rowsRemoved++;
+			totalRowsCleared++;
 			return i;
 		}
 	}
+
+	
+	updateScore();
+	
 	return -1;
 }
+
+bool Board::justReset() {
+	return boardReset;
+}
+void Board::resetBoard() {
+	score = 0;
+	level = 0;
+	rowsRemoved = 0;
+	totalRowsCleared = 0;
+	clearBoard();
+	nextHolder.resetPieces();
+	holder.clear();
+	movePiece->reset(' ');
+	updateHiglightPiece();		//updates the color of the highlight piece, as well as initial position.
+	updateHighlightLocation();
+	lastUpdated = SDL_GetTicks();
+	boardReset = true;
+	timeToMove = 1000;
+
+}
+void Board::clearBoard() {
+	for (int i = 0; i < rows; i++) {
+		for (int j = 0; j < cols; j++) {
+			board[i][j].updateType('e');
+
+		}
+	}
+}
+
+
+void Board::updateScore() {
+
+	switch (rowsRemoved) {
+	case 0:
+		break;
+	case 1:
+		score += 40 * (level + 1);
+		break;
+	case 2:
+		score += 100 * (level + 1);
+		break;
+	case 3:
+		score += 300 * (level + 1);
+		break;
+	case 4:
+		score += 1200 * (level + 1);
+		break;
+	default:
+		std::cout << "how did you remove 5 rows" << std::endl;
+		break;
+	}
+	rowsRemoved = 0;
+	
+}
 void Board::removeRow(int newRow) {
+	
+	for (int i = 0; i < cols; i++) {
+		board[newRow][i].updateType('e');
+	}
 	SDL_SetRenderDrawColor(Window::renderer, 0, 0, 0, 255);
 	SDL_RenderClear(Window::renderer);
 	render();
 	SDL_RenderPresent(Window::renderer);
 	SDL_Delay(50);
-	for (int i = 0; i < cols; i++) {
-		board[newRow][i].updateType('e');
-	}
 	bool done = false;
 	int lookingAtRow = newRow - 1;
 	while (lookingAtRow >= 0) {
 		for (int i = 0; i < cols; i++) {
 			if (!(board[lookingAtRow][i].isEmpty())) {
-			
+				
 				board[lookingAtRow + 1][i].updateType('f');
 				board[lookingAtRow + 1][i].updateColor(board[lookingAtRow][i].getColor());
 				board[lookingAtRow][i].updateType('e');
+				
+				
 			}
 		}
 
@@ -370,14 +508,14 @@ void Board::printBoard() {
 bool Board::canRotateClockwise() {
 	boxLocation newLocation[4];
 	GridPiece** grid;
-	boxLocation* center;
+	boxLocation* topLeftCorner;
 	int topLeftRow, topLeftCol;
 	switch (movePiece->getType()) {
 	case 'I':
 		grid = makeClockwiseGrid(4, 4);
-		center = movePiece->getCenter();
-		topLeftRow = center->row;
-		topLeftCol = center->col;
+		topLeftCorner = movePiece->getTopLeft();
+		topLeftRow = topLeftCorner->row;
+		topLeftCol = topLeftCorner->col;
 		if (checkIfCanRotate(grid, 4, 4, topLeftRow, topLeftCol)) {
 		
 			deleteGrid(grid, 4);
@@ -385,15 +523,14 @@ bool Board::canRotateClockwise() {
 		}
 		deleteGrid(grid, 4);
 		//implement I piece here, because it's a 4x4 grid.
-
 		break;
 	case 'O':
 		break;
 	default:
 		 grid = makeClockwiseGrid(3,3);
-		center = movePiece->getCenter();
-		topLeftRow = center->row - 1;
-		topLeftCol = center->col - 1;
+		topLeftCorner = movePiece->getTopLeft();
+		topLeftRow = topLeftCorner->row;
+		topLeftCol = topLeftCorner->col - 1;
 		if (checkIfCanRotate(grid, 3, 3, topLeftRow, topLeftCol)) {
 		
 			deleteGrid(grid, 3);
@@ -413,16 +550,13 @@ GridPiece** Board::makeClockwiseGrid(int gridRows, int gridCols) {
 		grid[i] = new GridPiece[gridCols];
 	}
 
-	boxLocation* center = movePiece->getCenter();
+	boxLocation* topLeftCorner = movePiece->getTopLeft();
 	int topLeftRow, topLeftCol;
-	if (movePiece->getType() != 'I') {
-		topLeftRow = center->row - 1;
-		topLeftCol = center->col - 1;
-	}
-	else {
-		topLeftRow = center->row;
-		topLeftCol = center->col;
-	}
+	
+	
+	topLeftRow = topLeftCorner->row;
+	topLeftCol = topLeftCorner->col;
+	
 	
 	boxLocation* boxes = movePiece->getBoxes();	//piece boxes
 
@@ -433,17 +567,10 @@ GridPiece** Board::makeClockwiseGrid(int gridRows, int gridCols) {
 			for (int k = 0; k < 4; k++) {	//check as compared to the boxes.
 				if (boxes[k].row == topLeftRow + i && boxes[k].col == topLeftCol + j) {	//tests if the piece is there.
 					grid[i][j].isEmpty = false;
-					if (center->row == topLeftRow + i && center->col == topLeftCol + j) {
-						grid[i][j].isCenter = true;
-					}
-					else {
-						grid[i][j].isCenter = false;
-					}
 					break;
 				}
 				else {
 					grid[i][j].isEmpty = true;
-					grid[i][j].isCenter = false;
 				}
 			}
 		}
@@ -469,8 +596,7 @@ GridPiece** Board::makeClockwiseGrid(int gridRows, int gridCols) {
 void Board::attemptRotateClockwise() {
 	if (canRotateClockwise()) {
 		if (movePiece->getType() == 'I') {
-			rotateClockwise(4, 4);
-			
+			rotateClockwise(4, 4);	
 		}
 		else {
 			rotateClockwise(3, 3);
@@ -490,10 +616,6 @@ void Board::rotateClockwise(int rows, int cols) {
 				boxes[numPiece].row = grid[i][j].row;
 				boxes[numPiece].col = grid[i][j].col;
 				
-				if(grid[i][j].isCenter) {
-					movePiece->getCenter()->row = grid[i][j].row;
-					movePiece->getCenter()->col = grid[i][j].col;
-				}
 				numPiece++;
 				
 			}
@@ -524,8 +646,6 @@ bool Board::checkIfCanRotate(GridPiece** grid, int rows, int cols, int topLeftRo
 						return false;
 					}
 				}
-
-
 			}
 		}
 	}
@@ -557,18 +677,18 @@ void Board::swap(GridPiece** grid, int row1, int col1, int row2, int col2) {
 	GridPiece tempPiece;
 	tempPiece.row = grid[row1][col1].row;
 	tempPiece.col = grid[row1][col1].col;
-	tempPiece.isCenter = grid[row1][col1].isCenter;
+	
 	tempPiece.isEmpty = grid[row1][col1].isEmpty;
 
 
 	grid[row1][col1].row = grid[row2][col2].row;
 	grid[row1][col1].col = grid[row2][col2].col;
-	grid[row1][col1].isCenter = grid[row2][col2].isCenter;
+
 	grid[row1][col1].isEmpty = grid[row2][col2].isEmpty;
 
 	grid[row2][col2].row = tempPiece.row;
 	grid[row2][col2].col = tempPiece.col;
-	grid[row2][col2].isCenter = tempPiece.isCenter;
+
 	grid[row2][col2].isEmpty = tempPiece.isEmpty;
 }
 
@@ -577,10 +697,7 @@ void Board::swap(GridPiece** grid, int row1, int col1, int row2, int col2) {
 void Board::printGrid(GridPiece** grid,int rows, int cols) {
 	for (int i = 0; i < rows; i++) {
 		for (int j = 0; j < cols; j++) {
-			if (grid[i][j].isCenter) {
-				std::cout << "c" << " ";
-			}
-			else if (grid[i][j].isEmpty) {
+			if (grid[i][j].isEmpty) {
 				std::cout << "e" << " ";
 			}
 			else {

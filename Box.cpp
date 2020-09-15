@@ -59,7 +59,8 @@ void Box::updateType(char newType) {
 	boxType = newType;
 }
 void Box::updateColor(char newColor) {
-	
+	colorType = newColor;
+
 	switch (newColor) {
 	case 't':
 		assignNewColor(teal);
